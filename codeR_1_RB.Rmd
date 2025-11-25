@@ -1,0 +1,461 @@
+---
+title: "Pemodelan Stokastik "
+author: "codeR_1_RB"
+date: "2025-11-19"
+output: html_document
+---
+
+# Pendahuluan
+
+Penelitian ini menganalisis pola okupansi parkir motor di Gedung F Institut Teknologi Sumatera menggunakan metode Rantai Markov. Total kapasitas parkir adalah 533 motor yang terdiri dari Parkir A (200 motor) dan Parkir B (333 motor).
+
+------------------------------------------------------------------------
+
+# 1. Persiapan Environment
+
+```{r setup, message=FALSE, warning=FALSE}
+# Install packages jika belum ada
+if (!require("ggplot2")) install.packages("ggplot2", repos = "https://cran.rstudio.com/")
+if (!require("expm")) install.packages("expm", repos = "https://cran.rstudio.com/")
+
+library(ggplot2)
+library(expm)
+
+cat(rep("=", 70), "\n", sep="")
+cat("ANALISIS OKUPANSI PARKIR DENGAN RANTAI MARKOV\n")
+cat(rep("=", 70), "\n\n", sep="")
+
+```
+
+------------------------------------------------------------------------
+
+# 2. Import dan Eksplorasi Data
+
+```{r import-data}
+cat(rep("-", 70), "\n", sep="")
+cat("1. IMPORT DAN PERSIAPAN DATA\n")
+cat(rep("-", 70), "\n", sep="")
+
+data_parkir <- read.csv("C:/Users/WELCOME/Downloads/Pemstok/Data Parkir Motor Gedung F.csv", stringsAsFactors = FALSE)
+kapasitas_total <- 533
+
+cat("\nKapasitas Total:", kapasitas_total, "motor\n")
+cat("Jumlah Observasi:", nrow(data_parkir), "\n")
+cat("Mean Okupansi:", round(mean(data_parkir$Persentase), 2), "%\n")
+cat("SD Okupansi:", round(sd(data_parkir$Persentase), 2), "%\n\n")
+```
+
+```{r tampilkan-data}
+print(data_parkir)
+```
+
+------------------------------------------------------------------------
+
+# 3. Klasifikasi State Okupansi
+
+```{r klasifikasi-state}
+cat(rep("-", 70), "\n", sep="")
+cat("2. KLASIFIKASI STATE OKUPANSI\n")
+cat(rep("-", 70), "\n", sep="")
+
+klasifikasi_state <- function(persentase) {
+  if (persentase < 40) return("Sepi")
+  else if (persentase <= 70) return("Sedang")
+  else return("Ramai")
+}
+
+motor_batas_sedang <- round(kapasitas_total * 0.40)
+motor_batas_ramai <- round(kapasitas_total * 0.70)
+
+cat("\nKriteria State:\n")
+cat("  Sepi   : < 40% (< 213 motor)\n")
+cat("  Sedang : 40-70% (213-373 motor)\n")
+cat("  Ramai  : > 70% (> 373 motor)\n\n")
+
+state_count <- table(data_parkir$Status)
+cat("Distribusi State:\n")
+print(state_count)
+cat("\n")
+```
+
+------------------------------------------------------------------------
+
+# 4. Visualisasi Data Okupansi
+
+```{r visualisasi, fig.width=12, fig.height=6}
+cat(rep("-", 70), "\n", sep="")
+cat("3. VISUALISASI DATA OKUPANSI\n")
+cat(rep("-", 70), "\n", sep="")
+
+data_parkir$ID <- seq_len(nrow(data_parkir))
+data_parkir$Label <- paste(data_parkir$Hari, data_parkir$Periode, sep = "\n")
+
+plot_okupansi <- ggplot(data_parkir, aes(x = ID, y = Jumlah_Motor)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_point(aes(color = Status), size = 3) +
+  geom_hline(yintercept = motor_batas_ramai, linetype = "dashed", 
+             color = "red", linewidth = 0.8) +
+  geom_hline(yintercept = motor_batas_sedang, linetype = "dashed", 
+             color = "orange", linewidth = 0.8) +
+  annotate("text", x = 14, y = motor_batas_ramai + 15, 
+           label = "Batas Ramai (70%)", color = "red", size = 3) +
+  annotate("text", x = 14, y = motor_batas_sedang + 15, 
+           label = "Batas Sedang (40%)", color = "orange", size = 3) +
+  scale_color_manual(values = c("Sepi" = "#FFA500", 
+                                 "Sedang" = "#FFD700", 
+                                 "Ramai" = "#FF6347")) +
+  scale_x_continuous(breaks = data_parkir$ID, 
+                     labels = data_parkir$Label) +
+  labs(title = "Grafik Okupansi Parkir Motor Gedung F ITERA",
+       x = "Hari dan Periode", y = "Jumlah Motor", color = "State") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        legend.position = "bottom")
+
+print(plot_okupansi)
+
+ggsave("grafik_okupansi_R.png", plot_okupansi, width = 12, height = 6, dpi = 300)
+cat("\nGrafik disimpan: grafik_okupansi_R.png\n\n")
+```
+
+------------------------------------------------------------------------
+
+# 5. Perhitungan Frekuensi Transisi
+
+```{r frekuensi-transisi}
+cat(rep("-", 70), "\n", sep="")
+cat("4. PERHITUNGAN FREKUENSI TRANSISI\n")
+cat(rep("-", 70), "\n", sep="")
+
+states <- data_parkir$Status
+n_obs <- length(states)
+state_levels <- c("Sepi", "Sedang", "Ramai")
+n_states <- length(state_levels)
+
+freq_matrix <- matrix(0, nrow = n_states, ncol = n_states,
+                      dimnames = list(state_levels, state_levels))
+
+for (i in 1:(n_obs - 1)) {
+  from_state <- states[i]
+  to_state <- states[i + 1]
+  freq_matrix[from_state, to_state] <- freq_matrix[from_state, to_state] + 1
+}
+
+cat("\nMatriks Frekuensi Transisi:\n")
+print(freq_matrix)
+cat("\nTotal Transisi:", sum(freq_matrix), "\n\n")
+```
+
+------------------------------------------------------------------------
+
+# 6. Konstruksi Matriks Probabilitas Transisi
+
+```{r matriks-probabilitas}
+cat(rep("-", 70), "\n", sep="")
+cat("5. KONSTRUKSI MATRIKS PROBABILITAS TRANSISI\n")
+cat(rep("-", 70), "\n", sep="")
+
+prob_matrix <- freq_matrix / rowSums(freq_matrix)
+prob_matrix[is.nan(prob_matrix)] <- 0
+
+cat("\nMatriks Probabilitas Transisi P:\n")
+print(round(prob_matrix, 3))
+
+cat("\nInterpretasi:\n")
+for (i in 1:n_states) {
+  cat(sprintf("Dari %s:\n", state_levels[i]))
+  for (j in 1:n_states) {
+    cat(sprintf("  P(%s->%s) = %.3f\n", 
+                state_levels[i], state_levels[j], prob_matrix[i, j]))
+  }
+}
+cat("\n")
+```
+
+------------------------------------------------------------------------
+
+# 7. Prediksi N-Step Ahead
+
+```{r prediksi-nstep}
+cat(rep("-", 70), "\n", sep="")
+cat("6. PREDIKSI N-STEP AHEAD\n")
+cat(rep("-", 70), "\n", sep="")
+
+initial_state <- c(0, 0, 1)
+names(initial_state) <- state_levels
+
+pred_1step <- initial_state %*% prob_matrix
+pred_2step <- pred_1step %*% prob_matrix
+
+cat("\nKondisi Awal: Ramai\n")
+cat("π(1) = [", paste(round(pred_1step, 3), collapse = ", "), "]\n")
+cat("π(2) = [", paste(round(pred_2step, 3), collapse = ", "), "]\n\n")
+```
+
+```{r prediksi-multistep}
+n_steps <- 10
+predictions <- matrix(0, nrow = n_steps + 1, ncol = n_states)
+predictions[1, ] <- initial_state
+colnames(predictions) <- state_levels
+rownames(predictions) <- paste0("n=", 0:n_steps)
+
+for (n in 1:n_steps) {
+  predictions[n + 1, ] <- predictions[n, ] %*% prob_matrix
+}
+
+cat("Prediksi Multi-Step:\n")
+print(round(predictions, 4))
+cat("\n")
+```
+
+------------------------------------------------------------------------
+
+# 8. Distribusi Steady-State
+
+```{r steady-state}
+cat(rep("-", 70), "\n", sep="")
+cat("7. DISTRIBUSI STEADY-STATE\n")
+cat(rep("-", 70), "\n", sep="")
+
+# Metode 1: Power Method (Iterasi Matriks)
+steady_state_power <- function(P, max_iter = 1000, tol = 1e-10) {
+  n <- nrow(P)
+  pi <- rep(1/n, n)
+  
+  for (iter in 1:max_iter) {
+    pi_new <- pi %*% P
+    if (sum(abs(pi_new - pi)) < tol) {
+      return(as.vector(pi_new))
+    }
+    pi <- as.vector(pi_new)
+  }
+  return(as.vector(pi))
+}
+
+# Metode 2: Eigen Decomposition (Lebih akurat untuk reducible chains)
+steady_state_eigen <- function(P) {
+  eigen_result <- eigen(t(P))
+  
+  # Cari eigenvector dengan eigenvalue = 1
+  idx <- which.max(abs(eigen_result$values - 1))
+  steady <- Re(eigen_result$vectors[, idx])
+  
+  # Normalisasi agar jumlah = 1
+  steady <- abs(steady) / sum(abs(steady))
+  
+  return(steady)
+}
+
+# Coba kedua metode
+cat("\nMetode 1 - Power Iteration:\n")
+steady_state_power_result <- steady_state_power(prob_matrix)
+names(steady_state_power_result) <- state_levels
+for (i in 1:n_states) {
+  cat(sprintf("  π(%s) = %.4f (%.1f%%)\n", 
+              state_levels[i], steady_state_power_result[i], 
+              steady_state_power_result[i] * 100))
+}
+
+cat("\nMetode 2 - Eigen Decomposition:\n")
+steady_state <- steady_state_eigen(prob_matrix)
+names(steady_state) <- state_levels
+for (i in 1:n_states) {
+  cat(sprintf("  π(%s) = %.4f (%.1f%%)\n", 
+              state_levels[i], steady_state[i], steady_state[i] * 100))
+}
+
+# Verifikasi
+verification <- steady_state %*% prob_matrix
+cat("\nVerifikasi π × P = π:\n")
+cat("Error:", sum(abs(verification - steady_state)), "\n")
+
+# Catatan penting tentang matriks
+cat("\nCATATAN:\n")
+if (steady_state["Sepi"] > 0.9) {
+  cat("* Matriks memiliki ABSORBING STATE di 'Sepi'\n")
+  cat("* State 'Sepi' hanya transisi ke 'Sepi' (100%)\n")
+  cat("* Dalam jangka panjang sistem akan terperangkap di state Sepi\n")
+  cat("* Ini terjadi karena data Jumat (Sepi) tidak kembali ke Ramai/Sedang\n")
+} else {
+  cat("* Matriks ergodic - distribusi steady-state stabil\n")
+}
+cat("\n")
+
+```
+
+------------------------------------------------------------------------
+
+# 9. Mean Recurrence Time
+
+```{r mean-recurrence}
+cat(rep("-", 70), "\n", sep="")
+cat("8. MEAN RECURRENCE TIME\n")
+cat(rep("-", 70), "\n", sep="")
+
+mean_recurrence <- 1 / steady_state
+
+cat("\nMean Recurrence Time (periode):\n")
+for (i in 1:n_states) {
+  cat(sprintf("  %s: %.2f\n", state_levels[i], mean_recurrence[i]))
+}
+cat("\n")
+```
+
+------------------------------------------------------------------------
+
+# 10. Validasi Model
+
+```{r validasi-model}
+cat(rep("-", 70), "\n", sep="")
+cat("9. VALIDASI MODEL\n")
+cat(rep("-", 70), "\n", sep="")
+
+predict_next_state <- function(current_state, P) {
+  probs <- current_state %*% P
+  predicted_state <- state_levels[which.max(probs)]
+  return(list(predicted = predicted_state, probabilities = as.vector(probs)))
+}
+
+# Pastikan states sudah terdefinisi dari chunk sebelumnya
+# Jika belum, ambil ulang dari data_parkir
+if (!exists("states")) {
+  states <- data_parkir$Status
+}
+
+n_transitions <- length(states) - 1
+
+cat(sprintf("\nDebug Info:\n"))
+cat(sprintf("  Length of states: %d\n", length(states)))
+cat(sprintf("  n_transitions: %d\n", n_transitions))
+
+results <- data.frame(
+  No = 1:n_transitions,
+  State_t = states[1:n_transitions],
+  State_t1_Actual = states[2:(n_transitions+1)],
+  State_t1_Predicted = character(n_transitions),
+  Correct = logical(n_transitions),
+  stringsAsFactors = FALSE
+)
+
+for (i in 1:n_transitions) {
+  current <- rep(0, n_states)
+  current[which(state_levels == states[i])] <- 1
+  prediction <- predict_next_state(current, prob_matrix)
+  results$State_t1_Predicted[i] <- prediction$predicted
+  results$Correct[i] <- (results$State_t1_Predicted[i] == results$State_t1_Actual[i])
+}
+
+accuracy <- sum(results$Correct) / n_transitions * 100
+n_correct <- sum(results$Correct)
+
+cat("\nHasil Validasi:\n")
+cat(sprintf("Total Transisi: %d\n", n_transitions))
+cat(sprintf("Prediksi Benar: %d\n", n_correct))
+cat(sprintf("Akurasi: %.1f%%\n\n", accuracy))
+
+conf_matrix <- table(Actual = results$State_t1_Actual, 
+                     Predicted = results$State_t1_Predicted)
+cat("Confusion Matrix:\n")
+print(conf_matrix)
+cat("\n")
+```
+
+```{r tabel-validasi}
+print(results)
+```
+
+------------------------------------------------------------------------
+
+# 11. Analisis Sensitivitas
+
+```{r sensitivitas}
+cat(rep("-", 70), "\n", sep="")
+cat("10. ANALISIS SENSITIVITAS\n")
+cat(rep("-", 70), "\n", sep="")
+
+prob_variants <- seq(0.3, 0.9, by = 0.1)
+sensitivity_results <- matrix(0, nrow = length(prob_variants), ncol = n_states)
+colnames(sensitivity_results) <- state_levels
+
+for (i in seq_along(prob_variants)) {
+  P_modified <- prob_matrix
+  P_modified["Ramai", "Sedang"] <- prob_variants[i]
+  P_modified["Ramai", "Ramai"] <- 1 - prob_variants[i]
+  ss <- steady_state_iter(P_modified, max_iter = 1000, tol = 1e-10)
+  sensitivity_results[i, ] <- ss
+}
+
+rownames(sensitivity_results) <- paste0("P=", round(prob_variants, 2))
+
+cat("\nSensitivitas P(Ramai->Sedang) terhadap Steady-State:\n")
+print(round(sensitivity_results, 4))
+cat("\n")
+```
+
+------------------------------------------------------------------------
+
+# 12. Ekspor Hasil
+
+```{r ekspor-hasil}
+cat(rep("-", 70), "\n", sep="")
+cat("11. EKSPOR HASIL\n")
+cat(rep("-", 70), "\n", sep="")
+
+write.csv(freq_matrix, "matriks_frekuensi.csv", row.names = TRUE)
+write.csv(prob_matrix, "matriks_probabilitas.csv", row.names = TRUE)
+
+cat("\nFile tersimpan:\n")
+cat("  1. matriks_frekuensi.csv\n")
+cat("  2. matriks_probabilitas.csv\n")
+cat("  3. grafik_okupansi_R.png\n\n")
+```
+
+------------------------------------------------------------------------
+
+# 13. Ringkasan Hasil
+
+```{r ringkasan}
+cat(rep("=", 70), "\n", sep="")
+cat("RINGKASAN HASIL ANALISIS\n")
+cat(rep("=", 70), "\n\n", sep="")
+
+cat("DATA:\n")
+cat(sprintf("  Total observasi: %d\n", nrow(data_parkir)))
+cat(sprintf("  Okupansi rata-rata: %.1f%%\n", mean(data_parkir$Persentase)))
+
+cat("\nPROBABILITAS TRANSISI:\n")
+cat(sprintf("  P(Ramai->Sedang) = %.3f\n", prob_matrix["Ramai", "Sedang"]))
+cat(sprintf("  P(Ramai->Ramai)  = %.3f\n", prob_matrix["Ramai", "Ramai"]))
+cat(sprintf("  P(Sedang->Ramai) = %.3f\n", prob_matrix["Sedang", "Ramai"]))
+
+cat("\nSTEADY-STATE:\n")
+for (i in 1:n_states) {
+  cat(sprintf("  %s: %.1f%%\n", state_levels[i], steady_state[i] * 100))
+}
+
+cat("\nPERFORMA MODEL:\n")
+cat(sprintf("  Akurasi: %.1f%%\n", accuracy))
+
+cat("\n")
+cat(rep("=", 70), "\n", sep="")
+cat("ANALISIS SELESAI\n")
+cat(rep("=", 70), "\n", sep="")
+```
+
+------------------------------------------------------------------------
+
+# Kesimpulan
+
+Model Rantai Markov berhasil menganalisis pola okupansi parkir motor Gedung F ITERA dengan akurasi **`r round(accuracy, 1)`%**.
+
+Hasil utama:
+
+1.  **Probabilitas Transisi Penting:**
+    -   Dari kondisi Ramai ke Sedang: `r round(prob_matrix["Ramai", "Sedang"]*100, 1)`%
+    -   Dari kondisi Ramai tetap Ramai: `r round(prob_matrix["Ramai", "Ramai"]*100, 1)`%
+2.  **Distribusi Jangka Panjang (Steady-State):**
+    -   Sepi: `r round(steady_state["Sepi"]*100, 1)`%
+    -   Sedang: `r round(steady_state["Sedang"]*100, 1)`%
+    -   Ramai: `r round(steady_state["Ramai"]*100, 1)`%
+3.  **Interpretasi:** Dalam jangka panjang, area parkir cenderung berada dalam kondisi Ramai (`r round(steady_state["Ramai"]*100, 1)`%) dan Sedang (`r round(steady_state["Sedang"]*100, 1)`%), yang mengindikasikan tingginya pemanfaatan fasilitas parkir di Gedung F.
