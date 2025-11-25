@@ -1,0 +1,16 @@
+Hari,Periode,Jumlah_Motor,Persentase,Status
+Senin,Pagi,385,72.3,Ramai
+Senin,Siang,420,78.8,Ramai
+Senin,Sore,310,58.2,Sedang
+Selasa,Pagi,395,74.2,Ramai
+Selasa,Siang,330,61.9,Sedang
+Selasa,Sore,285,53.5,Sedang
+Rabu,Pagi,265,49.7,Sedang
+Rabu,Siang,425,79.7,Ramai
+Rabu,Sore,320,60.0,Sedang
+Kamis,Pagi,380,71.3,Ramai
+Kamis,Siang,390,73.2,Ramai
+Kamis,Sore,410,76.9,Ramai
+Jumat,Pagi,245,46.0,Sedang
+Jumat,Siang,180,33.8,Sepi
+Jumat,Sore,125,23.5,Sepi
